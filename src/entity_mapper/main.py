@@ -1,7 +1,7 @@
 import inspect
 from collections import OrderedDict
 from pathlib import Path
-from typing import Tuple
+from typing import Optional
 
 import numpy as np
 import pandas as pd
@@ -41,22 +41,6 @@ def load_accredited_stations() -> pd.DataFrame:
 def load_bmus() -> pd.DataFrame:
     return bmus.main(
         "/Users/jjk/Dropbox/data/matched-data/raw/bmrs_bm_units-20241211.json"
-    )
-
-
-def lazy_load(
-    regos: pd.DataFrame = None,
-    accredited_stations: pd.DataFrame = None,
-    bmus: pd.DataFrame = None,
-) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
-    return (
-        entity_mapper.data.regos.load(Path(REGOS_PATH)) if regos is None else regos,
-        (
-            load_accredited_stations()
-            if accredited_stations is None
-            else accredited_stations
-        ),
-        load_bmus() if bmus is None else bmus,
     )
 
 
@@ -468,17 +452,16 @@ def mapping_score(generator_profile: dict) -> OrderedDict:
 
 def main_individual(
     rego_station_name: str,
-    regos: pd.DataFrame = None,
-    accredited_stations: pd.DataFrame = None,
-    bmus: pd.DataFrame = None,
-    expected_mappings_file: Path = None,
-):
-    regos, accredited_stations, bmus = lazy_load(regos, accredited_stations, bmus)
-    expected_mapping = (
-        scores.common.utils.from_yaml_file(expected_mappings_file)
-        if expected_mappings_file
-        else {}
-    ).get(rego_station_name, dict(bmu_ids=[], override=False))
+    regos: pd.DataFrame,
+    accredited_stations: pd.DataFrame,
+    bmus: pd.DataFrame,
+    expected_mappings: Optional[dict] = None,
+) -> pd.DataFrame:
+    if not expected_mappings:
+        expected_mappings = {}
+    expected_mapping = expected_mappings.get(
+        rego_station_name, dict(bmu_ids=[], override=False)
+    )
 
     generator_profile = {}
     matching_bmus = None
@@ -526,12 +509,11 @@ def main_individual(
 def main_range(
     start: int,
     stop: int,
-    regos: pd.DataFrame = None,
-    accredited_stations: pd.DataFrame = None,
-    bmus: pd.DataFrame = None,
-    expected_mappings_file: Path = None,
+    regos: pd.DataFrame,
+    accredited_stations: pd.DataFrame,
+    bmus: pd.DataFrame,
+    expected_mappings: Optional[dict] = None,
 ) -> pd.DataFrame:
-    regos, accredited_stations, bmus = lazy_load(regos, accredited_stations, bmus)
     regos_by_station = entity_mapper.data.regos.groupby_station(regos)
     station_summaries = []
     for i in range(start, stop):
@@ -541,10 +523,27 @@ def main_range(
                 regos,
                 accredited_stations,
                 bmus,
-                expected_mappings_file,
+                expected_mappings,
             )
         )
     return pd.concat(station_summaries)
+
+
+def main(
+    start: int, stop: int, expected_mappings_file: Optional[Path] = None
+) -> pd.DataFrame:
+    return main_range(
+        start=start,
+        stop=stop,
+        regos=entity_mapper.data.regos.load(Path(REGOS_PATH)),
+        accredited_stations=load_accredited_stations(),
+        bmus=load_bmus(),
+        expected_mappings=(
+            scores.common.utils.from_yaml_file(expected_mappings_file)
+            if expected_mappings_file
+            else {}
+        ),
+    )
 
 
 def compare_to_expected(

@@ -5,8 +5,7 @@ import entity_mapper.main
 
 
 def test_end_to_end() -> None:
-    regos, accredited_stations, bmus = entity_mapper.main.lazy_load()
-    mappings = entity_mapper.main.main_range(0, 3, regos, accredited_stations, bmus)
+    mappings = entity_mapper.main.main(start=0, stop=3)
     expected_mappings = pd.DataFrame(
         [
             {
