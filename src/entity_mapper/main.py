@@ -1,12 +1,18 @@
 import inspect
 from collections import OrderedDict
 from pathlib import Path
+from typing import Tuple
 
 import numpy as np
 import pandas as pd
 import scores.common.utils
 
-from entity_mapper import bm_metered_vol_agg, bmus, regos_analysis
+import entity_mapper.data.regos
+from entity_mapper import bm_metered_vol_agg, bmus
+
+REGOS_PATH = (
+    "/Users/jjk/Dropbox/data/matched-data/processed/test-data-regos-apr2022-mar2023.csv"
+)
 
 
 class MappingException(Exception):
@@ -23,13 +29,6 @@ def current_function_name() -> str:
 
 def print_warning(function_name: str, warning: str) -> None:
     print(f"!! WARNING !! {function_name}: {warning}")
-
-
-def load_regos() -> pd.DataFrame:
-    # TODO - rename
-    return regos_analysis.main(
-        regos_path="/Users/jjk/Dropbox/data/matched-data/processed/test-data-regos-apr2022-mar2023.csv"
-    )
 
 
 def load_accredited_stations() -> pd.DataFrame:
@@ -49,9 +48,9 @@ def lazy_load(
     regos: pd.DataFrame = None,
     accredited_stations: pd.DataFrame = None,
     bmus: pd.DataFrame = None,
-) -> (pd.DataFrame, pd.DataFrame, pd.DataFrame):
+) -> Tuple[pd.DataFrame, pd.DataFrame, pd.DataFrame]:
     return (
-        load_regos() if regos is None else regos,
+        entity_mapper.data.regos.load(Path(REGOS_PATH)) if regos is None else regos,
         (
             load_accredited_stations()
             if accredited_stations is None
@@ -533,7 +532,7 @@ def main_range(
     expected_mappings_file: Path = None,
 ) -> pd.DataFrame:
     regos, accredited_stations, bmus = lazy_load(regos, accredited_stations, bmus)
-    regos_by_station = regos_analysis.groupby_station(regos)
+    regos_by_station = entity_mapper.data.regos.groupby_station(regos)
     station_summaries = []
     for i in range(start, stop):
         station_summaries.append(

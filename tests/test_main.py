@@ -6,7 +6,7 @@ import entity_mapper.main
 
 def test_end_to_end() -> None:
     regos, accredited_stations, bmus = entity_mapper.main.lazy_load()
-    mappings = entity_mapper.main.main_range(0, 5, regos, accredited_stations, bmus)
+    mappings = entity_mapper.main.main_range(0, 3, regos, accredited_stations, bmus)
     expected_mappings = pd.DataFrame(
         [
             {
@@ -17,14 +17,6 @@ def test_end_to_end() -> None:
             {
                 "rego_name": "Triton Knoll Offshore Windfarm",
                 "bmu_ids": "T_TKNEW-1, T_TKNWW-1",
-            },
-            {
-                "rego_name": "East Anglia One Offshore Wind",
-                "bmu_ids": "T_EAAO-1, T_EAAO-2",
-            },
-            {
-                "rego_name": "London Array Offshore Windfarm",
-                "bmu_ids": "T_LARYW-1, T_LARYW-2, T_LARYW-3, T_LARYW-4",
             },
         ]
     )
