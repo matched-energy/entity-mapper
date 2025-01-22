@@ -23,7 +23,7 @@ def print_warning(function_name: str, warning: str) -> None:
     print(f"!! WARNING !! {function_name}: {warning}")
 
 
-def extract_rego_meta_data(rego_station_name: str, regos: pd.DataFrame, accredited_stations: pd.DataFrame) -> dict:
+def get_generator_profile(rego_station_name: str, regos: pd.DataFrame, accredited_stations: pd.DataFrame) -> dict:
     rego_accreditation_numbers = regos[regos["Generating Station / Agent Group"] == rego_station_name][
         "Accreditation No."
     ].unique()
@@ -367,7 +367,7 @@ def mapping_score(generator_profile: dict) -> OrderedDict:
     return row
 
 
-def main_individual(
+def map_station(
     rego_station_name: str,
     regos: pd.DataFrame,
     accredited_stations: pd.DataFrame,
@@ -381,7 +381,7 @@ def main_individual(
     generator_profile = {}
     matching_bmus = None
     try:
-        generator_profile.update(extract_rego_meta_data(rego_station_name, regos, accredited_stations))
+        generator_profile.update(get_generator_profile(rego_station_name, regos, accredited_stations))
 
         if expected_mapping["bmu_ids"] and expected_mapping.get("override"):
             matching_bmus = bmus[bmus["elexonBmUnit"].isin(expected_mapping["bmu_ids"])]
@@ -417,7 +417,7 @@ def main_individual(
     return mapping_score(generator_profile)
 
 
-def main_range(
+def map_station_range(
     start: int,
     stop: int,
     regos: pd.DataFrame,
@@ -429,7 +429,7 @@ def main_range(
     station_summaries = []
     for i in range(start, stop):
         station_summaries.append(
-            main_individual(
+            map_station(
                 regos_by_station.iloc[i]["Generating Station / Agent Group"],
                 regos,
                 accredited_stations,
@@ -448,7 +448,7 @@ def main(
     bmus_path: Path,
     expected_mappings_file: Optional[Path] = None,
 ) -> pd.DataFrame:
-    return main_range(
+    return map_station_range(
         start=start,
         stop=stop,
         regos=load_regos(regos_path),
