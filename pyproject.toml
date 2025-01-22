@@ -5,7 +5,7 @@ description = "Map entities across datasets"
 authors = [
     {name = "Joe Kwiatkowski", email = "joe@matched.energy"},
 ]
-dependencies = ["pandas>=2.2.3"]
+dependencies = ["pandas>=2.2.3", "click>=8.1.8", "pyyaml>=6.0.2"]
 requires-python = ">=3.13"
 readme = "README.md"
 license = {text = "MIT"}
@@ -23,6 +23,7 @@ dev = [
     "pytest>=8.3.4",
     "ruff>=0.9.2",
     "pytest-randomly>=3.16.0",
+    "pandas-stubs>=2.2.3.241126",
 ]
 
 
@@ -45,3 +46,7 @@ exclude = [
 [tool.pdm]
 distribution = true
 
+[tool.pdm.dev-dependencies]
+dev = [
+    "-e file:///${PROJECT_ROOT}/../scores#egg=scores",
+]
