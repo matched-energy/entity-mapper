@@ -5,7 +5,7 @@
 groups = ["default", "dev"]
 strategy = ["inherit_metadata"]
 lock_version = "4.5.0"
-content_hash = "sha256:37036d1a4d8846ec5893465506581f57c45e9eb0e4a5bd4d29b2f54335de279d"
+content_hash = "sha256:044447802d09acf7d937c4a662939488bba055d7cbe11bb2b60113212ab4d464"
 
 [[metadata.targets]]
 requires_python = ">=3.13"
@@ -613,6 +613,17 @@ dependencies = [
 files = [
     {file = "tox_pdm-0.7.2-py3-none-any.whl", hash = "sha256:12f6215416b7acd00a80a9e7128f3dc3e3c89308d60707f5d0a24abdf83ac104"},
     {file = "tox_pdm-0.7.2.tar.gz", hash = "sha256:a841a7e1e942a71805624703b9a6d286663bd6af79bba6130ba756975c315308"},
+]
+
+[[package]]
+name = "types-python-dateutil"
+version = "2.9.0.20241206"
+requires_python = ">=3.8"
+summary = "Typing stubs for python-dateutil"
+groups = ["dev"]
+files = [
+    {file = "types_python_dateutil-2.9.0.20241206-py3-none-any.whl", hash = "sha256:e248a4bc70a486d3e3ec84d0dc30eec3a5f979d6e7ee4123ae043eedbb987f53"},
+    {file = "types_python_dateutil-2.9.0.20241206.tar.gz", hash = "sha256:18f493414c26ffba692a72369fea7a154c502646301ebfe3d56a04b3767284cb"},
 ]
 
 [[package]]
