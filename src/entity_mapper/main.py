@@ -1,4 +1,3 @@
-import inspect
 from collections import OrderedDict
 from pathlib import Path
 from typing import Optional
@@ -12,19 +11,12 @@ from entity_mapper.data.accredited_stations import load_accredited_stations
 from entity_mapper.data.bmus import load_bmus
 from entity_mapper.data.regos import groupby_regos_by_station, load_regos
 
-REGOS_PATH = ()
-
 
 class MappingException(Exception):
     """An REGO to BM mapping exception"""
 
-    def __init__(self, message=""):
+    def __init__(self, message: str = "") -> None:
         super().__init__(message)
-
-
-# TODO - fix
-def current_function_name() -> str:
-    return inspect.currentframe().f_code.co_name
 
 
 def print_warning(function_name: str, warning: str) -> None:
@@ -189,7 +181,7 @@ def extract_bmu_meta_data(bmus: pd.DataFrame) -> dict:
         assert len(bmus["fuelType"].unique()) == 1
     except AssertionError:
         raise MappingException(
-            f"{current_function_name()} - Expected one lead party and fuel type but got"
+            "Expected one lead party and fuel type but got"
             + ", ".join(
                 [str(t) for t in bmus[["leadPartyName", "leadPartyId", "fuelType"]].itertuples(index=False, name=None)]
             )
@@ -249,9 +241,7 @@ def extract_bm_vols_by_month(bmus: pd.DataFrame, bmus_total_net_capacity: float)
     try:
         assert len(bmus["leadPartyId"].unique()) == 1
     except AssertionError:
-        raise MappingException(
-            f"{current_function_name()} - Expected one leadPartyId but got {list(bmus['leadPartyId'])}"
-        )
+        raise MappingException(f"Expected one leadPartyId but got {list(bmus['leadPartyId'])}")
 
     try:
         volumes_df = bm_metered_vol_agg.read_and_agg_vols(
