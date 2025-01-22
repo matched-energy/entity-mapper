@@ -50,11 +50,7 @@ def read_from_file(
     d = pd.read_csv(filepath, names=COLUMNS, skiprows=4)
     if current_holder_organisation_names:
         return d[
-            (
-                d["Current Holder Organisation Name"].isin(
-                    current_holder_organisation_names
-                )
-            )
+            (d["Current Holder Organisation Name"].isin(current_holder_organisation_names))
             & (d["Certificate Status"] == status)
             ## TODO: this is a bug! Should do this filtering in the 'filter function'?
         ]
@@ -65,9 +61,7 @@ def read_from_file(
 def parse_output_period(df_regos: pd.DataFrame) -> pd.DataFrame:
     df = df_regos.copy(deep=True)
     if df.empty:
-        df[["start", "end", "months_different"]] = pd.DataFrame(
-            columns=["start", "end", "months_difference"]
-        )
+        df[["start", "end", "months_different"]] = pd.DataFrame(columns=["start", "end", "months_difference"])
         return df
 
     # TODO: test
@@ -91,13 +85,10 @@ def parse_output_period(df_regos: pd.DataFrame) -> pd.DataFrame:
         else:
             raise ValueError(r"Invalid date string {}".format(date_str))
 
-    df[["start", "end"]] = df["Output Period"].apply(
-        lambda x: pd.Series(parse_date_range(x))
-    )
+    df[["start", "end"]] = df["Output Period"].apply(lambda x: pd.Series(parse_date_range(x)))
     df["end"] += np.timedelta64(1, "D")
     df["months_difference"] = df.apply(
-        lambda row: relativedelta(row["end"], row["start"]).years * 12
-        + relativedelta(row["end"], row["start"]).months,
+        lambda row: relativedelta(row["end"], row["start"]).years * 12 + relativedelta(row["end"], row["start"]).months,
         axis=1,
     )
 
@@ -118,9 +109,7 @@ def add_columns(regos: pd.DataFrame) -> pd.DataFrame:
 
 
 def filter(regos: pd.DataFrame) -> pd.DataFrame:
-    return regos[
-        (regos["Certificate Status"] == "Redeemed") & (regos["Scheme"] == "REGO")
-    ]
+    return regos[(regos["Certificate Status"] == "Redeemed") & (regos["Scheme"] == "REGO")]
 
 
 def load_regos(regos_path: Path) -> pd.DataFrame:
@@ -144,7 +133,5 @@ def groupby_regos_by_station(regos: pd.DataFrame) -> pd.DataFrame:
         )
         .sort_values(by="GWh", ascending=False)
     )
-    regos_by_station["%"] = (
-        regos_by_station["GWh"] / regos_by_station["GWh"].sum() * 100
-    )
+    regos_by_station["%"] = regos_by_station["GWh"] / regos_by_station["GWh"].sum() * 100
     return regos_by_station.reset_index()

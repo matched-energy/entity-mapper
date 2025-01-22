@@ -31,12 +31,10 @@ def print_warning(function_name: str, warning: str) -> None:
     print(f"!! WARNING !! {function_name}: {warning}")
 
 
-def extract_rego_meta_data(
-    rego_station_name: str, regos: pd.DataFrame, accredited_stations: pd.DataFrame
-) -> dict:
-    rego_accreditation_numbers = regos[
-        regos["Generating Station / Agent Group"] == rego_station_name
-    ]["Accreditation No."].unique()
+def extract_rego_meta_data(rego_station_name: str, regos: pd.DataFrame, accredited_stations: pd.DataFrame) -> dict:
+    rego_accreditation_numbers = regos[regos["Generating Station / Agent Group"] == rego_station_name][
+        "Accreditation No."
+    ].unique()
     try:
         assert len(rego_accreditation_numbers) == 1
     except Exception:
@@ -111,36 +109,24 @@ def filter_on_meta_data_features(bmus: pd.DataFrame, filters: list) -> pd.DataFr
     return filtered_bmus
 
 
-def intersection(
-    series: pd.Series, value: str, ignore: set = None
-) -> (pd.Series, pd.Series):
+def intersection(series: pd.Series, value: str, ignore: set = None) -> (pd.Series, pd.Series):
     if ignore is None:
         ignore = set([])
     intersection_count = series.apply(
         lambda x: (
             0
             if x is None
-            else len(
-                (
-                    set([word.strip("()") for word in x.lower().split()])
-                    & set(words(value))
-                )
-                - ignore
-            )
+            else len((set([word.strip("()") for word in x.lower().split()]) & set(words(value))) - ignore)
         )
     )
-    max_count_filter = (intersection_count > 0) & (
-        intersection_count == max(intersection_count)
-    )
+    max_count_filter = (intersection_count > 0) & (intersection_count == max(intersection_count))
     return intersection_count, max_count_filter
 
 
-def filter_on_generation_capacity(
-    station_profile: dict, bmus: pd.DataFrame
-) -> pd.Series:
-    return (
-        station_profile["rego_station_dnc_mw"] / 10 < bmus["generationCapacity"]
-    ) & (bmus["generationCapacity"] < station_profile["rego_station_dnc_mw"] * 2)
+def filter_on_generation_capacity(station_profile: dict, bmus: pd.DataFrame) -> pd.Series:
+    return (station_profile["rego_station_dnc_mw"] / 10 < bmus["generationCapacity"]) & (
+        bmus["generationCapacity"] < station_profile["rego_station_dnc_mw"] * 2
+    )
 
 
 def filter_on_fuel_type(station_profile: dict, bmus: pd.DataFrame) -> pd.Series:
@@ -151,9 +137,7 @@ def filter_on_fuel_type(station_profile: dict, bmus: pd.DataFrame) -> pd.Series:
     return filter
 
 
-def filter_on_name_intersection(
-    station_profile: dict, bmus: pd.DataFrame
-) -> (pd.Series, pd.Series):
+def filter_on_name_intersection(station_profile: dict, bmus: pd.DataFrame) -> (pd.Series, pd.Series):
     lead_party_count, _ = intersection(
         bmus["leadPartyName"],
         station_profile["rego_station_name"],
@@ -169,23 +153,15 @@ def filter_on_name_intersection(
     return max_count, max_count_filter
 
 
-def filter_on_name_contiguous(
-    station_profile: dict, bmus: pd.DataFrame
-) -> (pd.Series, pd.Series):
-    lead_party_count = bmus["leadPartyName"].apply(
-        lambda x: contiguous_words(station_profile["rego_station_name"], x)
-    )
-    bmu_count = bmus["bmUnitName"].apply(
-        lambda x: contiguous_words(station_profile["rego_station_name"], x)
-    )
+def filter_on_name_contiguous(station_profile: dict, bmus: pd.DataFrame) -> (pd.Series, pd.Series):
+    lead_party_count = bmus["leadPartyName"].apply(lambda x: contiguous_words(station_profile["rego_station_name"], x))
+    bmu_count = bmus["bmUnitName"].apply(lambda x: contiguous_words(station_profile["rego_station_name"], x))
     max_count = pd.Series(map(max, lead_party_count, bmu_count))
     max_count_filter = (max_count > 0) & (max_count == max(max_count))
     return max_count, max_count_filter
 
 
-def get_features_and_filters(
-    station_profile: dict, bmus: pd.DataFrame
-) -> (pd.DataFrame, list):
+def get_features_and_filters(station_profile: dict, bmus: pd.DataFrame) -> (pd.DataFrame, list):
     features = pd.DataFrame(index=bmus.index)
     filters = []
 
@@ -215,12 +191,7 @@ def extract_bmu_meta_data(bmus: pd.DataFrame) -> dict:
         raise MappingException(
             f"{current_function_name()} - Expected one lead party and fuel type but got"
             + ", ".join(
-                [
-                    str(t)
-                    for t in bmus[
-                        ["leadPartyName", "leadPartyId", "fuelType"]
-                    ].itertuples(index=False, name=None)
-                ]
+                [str(t) for t in bmus[["leadPartyName", "leadPartyId", "fuelType"]].itertuples(index=False, name=None)]
             )
         )
     return dict(
@@ -230,9 +201,7 @@ def extract_bmu_meta_data(bmus: pd.DataFrame) -> dict:
                     bmu_unit=bmu["elexonBmUnit"],
                     bmu_demand_capacity=bmu["demandCapacity"],
                     bmu_generation_capacity=bmu["generationCapacity"],
-                    bmu_production_or_consumption_flag=bmu[
-                        "productionOrConsumptionFlag"
-                    ],
+                    bmu_production_or_consumption_flag=bmu["productionOrConsumptionFlag"],
                     bmu_transmission_loss_factor=bmu["transmissionLossFactor"],
                 )
             )
@@ -243,42 +212,32 @@ def extract_bmu_meta_data(bmus: pd.DataFrame) -> dict:
         bmu_lead_party_name=bmus.iloc[0]["leadPartyName"],
         bmu_lead_party_id=bmus.iloc[0]["leadPartyId"],
         bmu_fuel_type=bmus.iloc[0]["fuelType"],
-        lead_party_name_intersection_count=bmus.iloc[0][
-            "leadPartyName_intersection_count"
-        ],
+        lead_party_name_intersection_count=bmus.iloc[0]["leadPartyName_intersection_count"],
         lead_party_name_contiguous_words=bmus.iloc[0]["leadPartyName_contiguous_words"],
     )
 
 
 def compare_stated_capacities(generator_profile: dict) -> dict:
     bmus_total_net_capacity = (
-        generator_profile["bmus_total_demand_capacity"]
-        + generator_profile["bmus_total_generation_capacity"]
+        generator_profile["bmus_total_demand_capacity"] + generator_profile["bmus_total_generation_capacity"]
     )
     return dict(
         bmus_total_net_capacity=bmus_total_net_capacity,
-        rego_bmu_net_power_ratio=generator_profile["rego_station_dnc_mw"]
-        / bmus_total_net_capacity,
+        rego_bmu_net_power_ratio=generator_profile["rego_station_dnc_mw"] / bmus_total_net_capacity,
     )
 
 
 def extract_rego_volume(
     regos: pd.DataFrame, rego_station_name: str, rego_station_dnc_mw: float
 ) -> (dict, pd.DataFrame):
-    station_regos = regos[
-        regos["Generating Station / Agent Group"] == rego_station_name
-    ]
-    station_regos_by_period = station_regos.groupby(
-        ["start", "end", "months_difference"]
-    ).agg(dict(GWh="sum"))
+    station_regos = regos[regos["Generating Station / Agent Group"] == rego_station_name]
+    station_regos_by_period = station_regos.groupby(["start", "end", "months_difference"]).agg(dict(GWh="sum"))
     rego_total_volume = station_regos_by_period["GWh"].sum()
     return (
         dict(
             rego_total_volume=rego_total_volume,
             rego_capacity_factor=(
-                rego_total_volume
-                * 1e3
-                / (rego_station_dnc_mw * 24 * 365)  # NOTE: assuming 1 year!
+                rego_total_volume * 1e3 / (rego_station_dnc_mw * 24 * 365)  # NOTE: assuming 1 year!
             ),
             rego_sampling_months=12,  # NOTE: presumed!
         ),
@@ -286,9 +245,7 @@ def extract_rego_volume(
     )
 
 
-def extract_bm_vols_by_month(
-    bmus: pd.DataFrame, bmus_total_net_capacity: float
-) -> pd.DataFrame:
+def extract_bm_vols_by_month(bmus: pd.DataFrame, bmus_total_net_capacity: float) -> pd.DataFrame:
     try:
         assert len(bmus["leadPartyId"].unique()) == 1
     except AssertionError:
@@ -315,18 +272,14 @@ def extract_bm_vols_by_month(
         raise MappingException(f"Failed to extract bm volumes by month {e}")
 
 
-def compare_rego_and_bmu_volumes(
-    rego_volumes: pd.DataFrame, bmu_volumes: pd.DataFrame
-) -> pd.DataFrame:
+def compare_rego_and_bmu_volumes(rego_volumes: pd.DataFrame, bmu_volumes: pd.DataFrame) -> pd.DataFrame:
     merged_df = pd.merge(
         rego_volumes,
         bmu_volumes,
         left_index=True,
         right_index=True,
     )
-    merged_df["rego_to_bmu_ratio"] = (
-        merged_df["GWh"] / merged_df["BM Unit Metered Volume"]
-    )
+    merged_df["rego_to_bmu_ratio"] = merged_df["GWh"] / merged_df["BM Unit Metered Volume"]
     merged_df.index.name = "start"
     return merged_df
 
@@ -344,9 +297,7 @@ def parse_volume_comparison(volume_comparison: pd.DataFrame) -> dict:
                 )
                 for _, row in volume_comparison.reset_index().iterrows()
             ],
-            rego_bmu_volume_ratio_median=volume_comparison[
-                "rego_to_bmu_ratio"
-            ].median(),
+            rego_bmu_volume_ratio_median=volume_comparison["rego_to_bmu_ratio"].median(),
             rego_bmu_volume_ratio_min=volume_comparison["rego_to_bmu_ratio"].min(),
             rego_bmu_volume_ratio_max=volume_comparison["rego_to_bmu_ratio"].max(),
         )
@@ -364,9 +315,7 @@ def add_score(
     score = {score_name: generator_profile.get(column)}
     for s in stat_range:
         score[f"p({s['lower']}, {s['upper']})"] = (
-            s["p"]
-            if (s["lower"] <= generator_profile.get(column, default) < s["upper"])
-            else 1
+            s["p"] if (s["lower"] <= generator_profile.get(column, default) < s["upper"]) else 1
         )
     return score
 
@@ -378,13 +327,9 @@ def mapping_score(generator_profile: dict) -> OrderedDict:
         "rego_technology": generator_profile.get("rego_station_technology"),
         "lead_party_name": generator_profile.get("bmu_lead_party_name"),
         "lead_party_id": generator_profile.get("bmu_lead_party_id"),
-        "bmu_ids": ", ".join(
-            [bmu["bmu_unit"] for bmu in generator_profile.get("bmus", [])]
-        ),
+        "bmu_ids": ", ".join([bmu["bmu_unit"] for bmu in generator_profile.get("bmus", [])]),
         "bmu_fuel_type": generator_profile.get("bmu_fuel_type"),
-        "intersection_count": generator_profile.get(
-            "lead_party_name_intersection_count"
-        ),
+        "intersection_count": generator_profile.get("lead_party_name_intersection_count"),
     }
     mapping_scores_list = [
         add_score(generator_profile, **score_conf)
@@ -427,12 +372,7 @@ def mapping_score(generator_profile: dict) -> OrderedDict:
             ),
         ]
     ]
-    row = pd.DataFrame(
-        [
-            summary_dict
-            | {k: v for score in mapping_scores_list for k, v in score.items()}
-        ]
-    )
+    row = pd.DataFrame([summary_dict | {k: v for score in mapping_scores_list for k, v in score.items()}])
     row["p"] = row[[col for col in row.columns if "p(" in col]].prod(axis=1)
     return row
 
@@ -446,22 +386,16 @@ def main_individual(
 ) -> pd.DataFrame:
     if not expected_mappings:
         expected_mappings = {}
-    expected_mapping = expected_mappings.get(
-        rego_station_name, dict(bmu_ids=[], override=False)
-    )
+    expected_mapping = expected_mappings.get(rego_station_name, dict(bmu_ids=[], override=False))
 
     generator_profile = {}
     matching_bmus = None
     try:
-        generator_profile.update(
-            extract_rego_meta_data(rego_station_name, regos, accredited_stations)
-        )
+        generator_profile.update(extract_rego_meta_data(rego_station_name, regos, accredited_stations))
 
         if expected_mapping["bmu_ids"] and expected_mapping.get("override"):
             matching_bmus = bmus[bmus["elexonBmUnit"].isin(expected_mapping["bmu_ids"])]
-            features, filters = get_features_and_filters(
-                generator_profile, matching_bmus
-            )
+            features, filters = get_features_and_filters(generator_profile, matching_bmus)
             matching_bmus = pd.concat([matching_bmus, features], axis=1)
         else:
             features, filters = get_features_and_filters(generator_profile, bmus)
@@ -531,35 +465,25 @@ def main(
         accredited_stations=load_accredited_stations(accredited_stations_dir),
         bmus=load_bmus(bmus_path),
         expected_mappings=(
-            scores.common.utils.from_yaml_file(expected_mappings_file)
-            if expected_mappings_file
-            else {}
+            scores.common.utils.from_yaml_file(expected_mappings_file) if expected_mappings_file else {}
         ),
     )
 
 
-def compare_to_expected(
-    mapping_scores: pd.DataFrame, expected_mappings_file: Path
-) -> pd.DataFrame:
+def compare_to_expected(mapping_scores: pd.DataFrame, expected_mappings_file: Path) -> pd.DataFrame:
     """Left join"""
     expected_mappings = scores.common.utils.from_yaml_file(expected_mappings_file)
     comparisons = []
     for _, row in mapping_scores.iterrows():
         rego_station_name = row["rego_name"]
         bmu_ids = [id.strip() for id in row["bmu_ids"].split(",")]
-        expected_bmu_ids = expected_mappings.get(rego_station_name, {}).get(
-            "bmu_ids", []
-        )
+        expected_bmu_ids = expected_mappings.get(rego_station_name, {}).get("bmu_ids", [])
         comparisons.append(
             dict(
                 rego_station_name=rego_station_name,
                 bmu_ids=", ".join(bmu_ids),
                 expected_bmu_ids=", ".join(expected_bmu_ids),
-                verified=(
-                    None
-                    if not expected_bmu_ids
-                    else (set(bmu_ids) == set(expected_bmu_ids))
-                ),
+                verified=(None if not expected_bmu_ids else (set(bmu_ids) == set(expected_bmu_ids))),
             )
         )
     return pd.DataFrame(comparisons)
