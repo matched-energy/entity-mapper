@@ -7,12 +7,12 @@ import numpy as np
 import pandas as pd
 import scores.common.utils
 
-import entity_mapper.data.regos
-from entity_mapper import bm_metered_vol_agg, bmus
+from entity_mapper import bm_metered_vol_agg
+from entity_mapper.data.accredited_stations import load_accredited_stations
+from entity_mapper.data.bmus import load_bmus
+from entity_mapper.data.regos import groupby_regos_by_station, load_regos
 
-REGOS_PATH = (
-    "/Users/jjk/Dropbox/data/matched-data/processed/test-data-regos-apr2022-mar2023.csv"
-)
+REGOS_PATH = ()
 
 
 class MappingException(Exception):
@@ -29,19 +29,6 @@ def current_function_name() -> str:
 
 def print_warning(function_name: str, warning: str) -> None:
     print(f"!! WARNING !! {function_name}: {warning}")
-
-
-def load_accredited_stations() -> pd.DataFrame:
-    # TODO - rename
-    return bmus.read_accredited_stations(
-        "/Users/jjk/Library/CloudStorage/Dropbox/data/matched-data/raw/accredited-stations"
-    )
-
-
-def load_bmus() -> pd.DataFrame:
-    return bmus.main(
-        "/Users/jjk/Dropbox/data/matched-data/raw/bmrs_bm_units-20241211.json"
-    )
 
 
 def extract_rego_meta_data(
@@ -514,7 +501,7 @@ def main_range(
     bmus: pd.DataFrame,
     expected_mappings: Optional[dict] = None,
 ) -> pd.DataFrame:
-    regos_by_station = entity_mapper.data.regos.groupby_station(regos)
+    regos_by_station = groupby_regos_by_station(regos)
     station_summaries = []
     for i in range(start, stop):
         station_summaries.append(
@@ -530,14 +517,19 @@ def main_range(
 
 
 def main(
-    start: int, stop: int, expected_mappings_file: Optional[Path] = None
+    start: int,
+    stop: int,
+    regos_path: Path,
+    accredited_stations_dir: Path,
+    bmus_path: Path,
+    expected_mappings_file: Optional[Path] = None,
 ) -> pd.DataFrame:
     return main_range(
         start=start,
         stop=stop,
-        regos=entity_mapper.data.regos.load(Path(REGOS_PATH)),
-        accredited_stations=load_accredited_stations(),
-        bmus=load_bmus(),
+        regos=load_regos(regos_path),
+        accredited_stations=load_accredited_stations(accredited_stations_dir),
+        bmus=load_bmus(bmus_path),
         expected_mappings=(
             scores.common.utils.from_yaml_file(expected_mappings_file)
             if expected_mappings_file

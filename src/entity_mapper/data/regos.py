@@ -123,7 +123,7 @@ def filter(regos: pd.DataFrame) -> pd.DataFrame:
     ]
 
 
-def load(regos_path: Path) -> pd.DataFrame:
+def load_regos(regos_path: Path) -> pd.DataFrame:
     regos = read_from_file(regos_path)
     regos = parse_output_period(regos)
     regos = add_columns(regos)
@@ -131,7 +131,7 @@ def load(regos_path: Path) -> pd.DataFrame:
     return regos
 
 
-def groupby_station(regos: pd.DataFrame) -> pd.DataFrame:
+def groupby_regos_by_station(regos: pd.DataFrame) -> pd.DataFrame:
     regos_by_station = (
         regos.groupby("Generating Station / Agent Group")
         .agg(

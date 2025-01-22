@@ -1,11 +1,27 @@
+from pathlib import Path
+
 import pandas as pd
 from pandas.testing import assert_frame_equal
 
 import entity_mapper.main
 
+# TODO: need to manage data somehow - just upload test data somewhere? make it small enough to go in this repo?
+
 
 def test_end_to_end() -> None:
-    mappings = entity_mapper.main.main(start=0, stop=3)
+    mappings = entity_mapper.main.main(
+        start=0,
+        stop=3,
+        regos_path=Path(
+            "/Users/jjk/Dropbox/data/matched-data/processed/test-data-regos-apr2022-mar2023.csv"
+        ),
+        accredited_stations_dir=Path(
+            "/Users/jjk/Library/CloudStorage/Dropbox/data/matched-data/raw/accredited-stations"
+        ),
+        bmus_path=Path(
+            "/Users/jjk/Dropbox/data/matched-data/raw/bmrs_bm_units-20241211.json"
+        ),
+    )
     expected_mappings = pd.DataFrame(
         [
             {
