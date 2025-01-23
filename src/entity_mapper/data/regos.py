@@ -1,7 +1,7 @@
 import copy
 import os
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Tuple
 
 import numpy as np
 import pandas as pd
@@ -177,7 +177,7 @@ def extract_rego_volume_by_month(
     regos: pd.DataFrame,
     rego_station_name: str,
     rego_station_dnc_mw: float,  # TODO - move this
-) -> (dict, pd.DataFrame):
+) -> Tuple[dict, pd.DataFrame]:
     # TODO - validate always monthly
     station_regos = regos[regos["Generating Station / Agent Group"] == rego_station_name]
     station_regos_by_period = station_regos.groupby(["start", "end", "months_difference"]).agg(dict(GWh="sum"))

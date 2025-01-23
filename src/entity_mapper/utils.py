@@ -1,7 +1,7 @@
 import logging
 import sys
 from pathlib import Path
-from typing import Any, Optional, Union
+from typing import Dict, Union
 
 import numpy as np
 import pandas as pd
@@ -47,19 +47,19 @@ yaml.add_representer(np.float32, float_representer)
 yaml.add_representer(np.float64, float_representer)
 
 
-def from_yaml_text(text: str) -> Any:
+def from_yaml_text(text: str) -> Dict:
     return yaml.load(text, Loader=yaml.FullLoader)
 
 
-def from_yaml_file(path: Path) -> Any:
+def from_yaml_file(path: Path) -> Dict:
     with open(path, "r") as file:
         return from_yaml_text(file.read())
 
 
-def to_yaml_text(obj: Any) -> Optional[str]:
-    return yaml.dump(obj, default_flow_style=False)
+def to_yaml_text(dictionary: Dict) -> str:
+    return yaml.dump(dictionary, default_flow_style=False)
 
 
-def to_yaml_file(obj: Any, path: Path) -> None:
+def to_yaml_file(dictionary: Dict, path: Path) -> None:
     with open(path, "w") as file:
-        file.write(to_yaml_text(obj))
+        file.write(to_yaml_text(dictionary))

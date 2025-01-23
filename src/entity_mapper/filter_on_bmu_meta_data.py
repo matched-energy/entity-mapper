@@ -1,9 +1,11 @@
 import copy
+from typing import Optional, Set, Tuple
 
 import numpy as np
 import pandas as pd
 
 import entity_mapper.utils
+from entity_mapper.common import MappingException
 
 
 ################################################################################
@@ -15,15 +17,15 @@ def words(name: str) -> list:
 
 def contiguous_words(l_name: str, r_name: str) -> int:
     count = 0
-    for l, r in zip(words(l_name), words(r_name)):
-        if l == r:
+    for left, right in zip(words(l_name), words(r_name)):
+        if left == right:
             count += 1
         else:
             break
     return count
 
 
-def intersection(series: pd.Series, value: str, ignore: set = None) -> (pd.Series, pd.Series):
+def intersection(series: pd.Series, value: str, ignore: Optional[Set] = None) -> Tuple[pd.Series, pd.Series]:
     if ignore is None:
         ignore = set([])
     intersection_count = series.apply(
@@ -40,7 +42,7 @@ def intersection(series: pd.Series, value: str, ignore: set = None) -> (pd.Serie
 ################################################################################
 # FILTERS
 ################################################################################
-def filter_on_name_contiguous(station_profile: dict, bmus: pd.DataFrame) -> (pd.Series, pd.Series):
+def filter_on_name_contiguous(station_profile: dict, bmus: pd.DataFrame) -> Tuple[pd.Series, pd.Series]:
     lead_party_count = bmus["leadPartyName"].apply(lambda x: contiguous_words(station_profile["rego_station_name"], x))
     bmu_count = bmus["bmUnitName"].apply(lambda x: contiguous_words(station_profile["rego_station_name"], x))
     # max_count = pd.Series(map(max, lead_party_count, bmu_count))
@@ -49,7 +51,7 @@ def filter_on_name_contiguous(station_profile: dict, bmus: pd.DataFrame) -> (pd.
     return max_count, max_count_filter
 
 
-def filter_on_name_intersection(station_profile: dict, bmus: pd.DataFrame) -> (pd.Series, pd.Series):
+def filter_on_name_intersection(station_profile: dict, bmus: pd.DataFrame) -> Tuple[pd.Series, pd.Series]:
     lead_party_count, _ = intersection(
         bmus["leadPartyName"],
         station_profile["rego_station_name"],
@@ -82,7 +84,7 @@ def filter_on_generation_capacity(station_profile: dict, bmus: pd.DataFrame) -> 
 ################################################################################
 # APPLY FILTERS
 ################################################################################
-def define_bmu_match_features_and_filters(station_profile: dict, bmus: pd.DataFrame) -> (pd.DataFrame, list):
+def define_bmu_match_features_and_filters(station_profile: dict, bmus: pd.DataFrame) -> Tuple[pd.DataFrame, list]:
     features = pd.DataFrame(index=bmus.index)
     filters = []
 
