@@ -1,26 +1,19 @@
 import copy
 from collections import OrderedDict
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional
 
 import numpy as np
 import pandas as pd
 import scores.common.utils
 
 import entity_mapper.utils
-from entity_mapper import bm_metered_vol_agg
+from entity_mapper.common import MappingException
 from entity_mapper.data.accredited_stations import load_accredited_stations
-from entity_mapper.data.bmus import load_bmus
-from entity_mapper.data.regos import groupby_regos_by_station, load_regos
+from entity_mapper.data.bmus import extract_bm_vols_by_month, load_bmus
+from entity_mapper.data.regos import extract_rego_volume, groupby_regos_by_station, load_regos
 
 LOGGER = entity_mapper.utils.get_logger("entity_mapper")
-
-
-class MappingException(Exception):
-    """An REGO to BM mapping exception"""
-
-    def __init__(self, message: str = "") -> None:
-        super().__init__(message)
 
 
 def get_generator_profile(rego_station_name: str, regos: pd.DataFrame, accredited_stations: pd.DataFrame) -> dict:
@@ -216,46 +209,6 @@ def appraise_energy_volumes(generator_profile: dict, regos: pd.DataFrame) -> dic
 
     volume_comparison = compare_rego_and_bmu_volumes(rego_volumes, bmu_volumes)
     return parse_volume_comparison(volume_comparison)
-
-
-def extract_rego_volume(
-    regos: pd.DataFrame, rego_station_name: str, rego_station_dnc_mw: float
-) -> (dict, pd.DataFrame):
-    station_regos = regos[regos["Generating Station / Agent Group"] == rego_station_name]
-    station_regos_by_period = station_regos.groupby(["start", "end", "months_difference"]).agg(dict(GWh="sum"))
-    rego_total_volume = station_regos_by_period["GWh"].sum()
-    return (
-        dict(
-            rego_total_volume=rego_total_volume,
-            rego_capacity_factor=(
-                rego_total_volume * 1e3 / (rego_station_dnc_mw * 24 * 365)  # NOTE: assuming 1 year!
-            ),
-            rego_sampling_months=12,  # NOTE: presumed!
-        ),
-        station_regos_by_period.reset_index().set_index("start").sort_index(),
-    )
-
-
-def extract_bm_vols_by_month(
-    lead_party_id: str, bmu_ids: list, bmus_total_net_capacity: float
-) -> Tuple[dict, pd.DataFrame]:
-    try:
-        volumes_df = bm_metered_vol_agg.read_and_agg_vols(
-            Path("/Users/jjk/data/2024-12-12-CP2023-all-bscs-s0142/"),
-            lead_party_id,
-            bmu_ids,
-        )
-        total_volume = volumes_df["BM Unit Metered Volume"].sum()
-        return (
-            dict(
-                bmu_total_volume=total_volume,
-                bmu_capacity_factor=total_volume / (bmus_total_net_capacity * 24 * 365),
-                bmu_sampling_months=12,  # NOTE: presumed! TODO: test for this!
-            ),
-            bm_metered_vol_agg.vols_by_month(volumes_df),
-        )
-    except Exception as e:
-        raise MappingException(f"Failed to extract bm volumes by month {e}")
 
 
 def compare_rego_and_bmu_volumes(rego_volumes: pd.DataFrame, bmu_volumes: pd.DataFrame) -> pd.DataFrame:

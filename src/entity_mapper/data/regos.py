@@ -135,3 +135,23 @@ def groupby_regos_by_station(regos: pd.DataFrame) -> pd.DataFrame:
     )
     regos_by_station["%"] = regos_by_station["GWh"] / regos_by_station["GWh"].sum() * 100
     return regos_by_station.reset_index()
+
+
+def extract_rego_volume(
+    regos: pd.DataFrame,
+    rego_station_name: str,
+    rego_station_dnc_mw: float,  # TODO - move this
+) -> (dict, pd.DataFrame):
+    station_regos = regos[regos["Generating Station / Agent Group"] == rego_station_name]
+    station_regos_by_period = station_regos.groupby(["start", "end", "months_difference"]).agg(dict(GWh="sum"))
+    rego_total_volume = station_regos_by_period["GWh"].sum()
+    return (
+        dict(
+            rego_total_volume=rego_total_volume,
+            rego_capacity_factor=(
+                rego_total_volume * 1e3 / (rego_station_dnc_mw * 24 * 365)  # NOTE: assuming 1 year!
+            ),
+            rego_sampling_months=12,  # NOTE: presumed!
+        ),
+        station_regos_by_period.reset_index().set_index("start").sort_index(),
+    )
