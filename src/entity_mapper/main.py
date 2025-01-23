@@ -16,7 +16,7 @@ from entity_mapper.data.regos import (
     load_accredited_stations,
     load_regos,
 )
-from entity_mapper.match_meta_data import apply_bmu_match_filters, define_bmu_match_features_and_filters
+from entity_mapper.filter_on_bmu_meta_data import apply_bmu_match_filters, define_bmu_match_features_and_filters
 
 LOGGER = entity_mapper.utils.get_logger("entity_mapper")
 
