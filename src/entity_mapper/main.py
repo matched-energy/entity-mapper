@@ -2,7 +2,6 @@ from pathlib import Path
 from typing import Optional
 
 import pandas as pd
-import scores.common.utils
 
 import entity_mapper.utils
 from entity_mapper.common import MappingException
@@ -49,7 +48,7 @@ def map_station(
 
     except MappingException as e:
         LOGGER.warning(str(e) + str(generator_profile))
-    LOGGER.debug(scores.common.utils.to_yaml_text(generator_profile))
+    LOGGER.debug(entity_mapper.utils.to_yaml_text(generator_profile))
     return summarise_mapping_and_mapping_strength(generator_profile)
 
 
@@ -91,6 +90,6 @@ def main(
         accredited_stations=load_accredited_stations(accredited_stations_dir),
         bmus=load_bmus(bmus_path),
         expected_mappings=(
-            scores.common.utils.from_yaml_file(expected_mappings_file) if expected_mappings_file else {}
+            entity_mapper.utils.from_yaml_file(expected_mappings_file) if expected_mappings_file else {}
         ),
     )
