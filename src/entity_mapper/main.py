@@ -12,16 +12,14 @@ from entity_mapper.data.accredited_stations import load_accredited_stations
 from entity_mapper.data.bmus import load_bmus
 from entity_mapper.data.regos import groupby_regos_by_station, load_regos
 
+LOGGER = entity_mapper.utils.get_logger("entity_mapper")
+
 
 class MappingException(Exception):
     """An REGO to BM mapping exception"""
 
     def __init__(self, message: str = "") -> None:
         super().__init__(message)
-
-
-def print_warning(function_name: str, warning: str) -> None:
-    print(f"!! WARNING !! {function_name}: {warning}")
 
 
 def get_generator_profile(rego_station_name: str, regos: pd.DataFrame, accredited_stations: pd.DataFrame) -> dict:
@@ -418,9 +416,8 @@ def map_station(
         generator_profile.update(appraise_energy_volumes(generator_profile, regos))
 
     except MappingException as e:
-        print("\n### EXCEPTION\n" + str(e))
-        print("\n### GENERATOR PROFILE\n" + str(generator_profile))
-    print(scores.common.utils.to_yaml_text(generator_profile))
+        LOGGER.warning(str(e) + str(generator_profile))
+    LOGGER.debug(scores.common.utils.to_yaml_text(generator_profile))
     return mapping_score(generator_profile)
 
 
