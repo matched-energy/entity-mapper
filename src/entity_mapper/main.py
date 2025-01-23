@@ -157,7 +157,7 @@ def rate_bmu_match(station_profile: dict, bmus: pd.DataFrame) -> (pd.DataFrame, 
     return features, filters
 
 
-def extract_bmu_meta_data(bmus: pd.DataFrame) -> dict:
+def get_bmu_list_and_aggregate_properties(bmus: pd.DataFrame) -> dict:
     try:
         assert len(bmus["leadPartyName"].unique()) == 1
         assert len(bmus["leadPartyId"].unique()) == 1
@@ -172,13 +172,11 @@ def extract_bmu_meta_data(bmus: pd.DataFrame) -> dict:
     return dict(
         bmus=[
             dict(
-                dict(
-                    bmu_unit=bmu["elexonBmUnit"],
-                    bmu_demand_capacity=bmu["demandCapacity"],
-                    bmu_generation_capacity=bmu["generationCapacity"],
-                    bmu_production_or_consumption_flag=bmu["productionOrConsumptionFlag"],
-                    bmu_transmission_loss_factor=bmu["transmissionLossFactor"],
-                )
+                bmu_unit=bmu["elexonBmUnit"],  # TODO --> bmu_id
+                bmu_demand_capacity=bmu["demandCapacity"],
+                bmu_generation_capacity=bmu["generationCapacity"],
+                bmu_production_or_consumption_flag=bmu["productionOrConsumptionFlag"],
+                bmu_transmission_loss_factor=bmu["transmissionLossFactor"],
             )
             for i, bmu in bmus.iterrows()
         ],
@@ -192,7 +190,7 @@ def extract_bmu_meta_data(bmus: pd.DataFrame) -> dict:
     )
 
 
-def compare_stated_capacities(generator_profile: dict) -> dict:
+def appraise_rated_power(generator_profile: dict) -> dict:
     bmus_total_net_capacity = (
         generator_profile["bmus_total_demand_capacity"] + generator_profile["bmus_total_generation_capacity"]
     )
@@ -200,6 +198,25 @@ def compare_stated_capacities(generator_profile: dict) -> dict:
         bmus_total_net_capacity=bmus_total_net_capacity,
         rego_bmu_net_power_ratio=generator_profile["rego_station_dnc_mw"] / bmus_total_net_capacity,
     )
+
+
+def appraise_energy_volumes(generator_profile: dict, regos: pd.DataFrame) -> dict:
+    rego_volume_stats, rego_volumes = extract_rego_volume(
+        regos,
+        generator_profile["rego_station_name"],
+        generator_profile["rego_station_dnc_mw"],
+    )
+    generator_profile.update(rego_volume_stats)
+
+    bmu_volume_stats, bmu_volumes = extract_bm_vols_by_month(
+        generator_profile["bmu_lead_party_id"],
+        [bmu["bmu_unit"] for bmu in generator_profile["bmus"]],
+        generator_profile["bmus_total_net_capacity"],
+    )
+    generator_profile.update(bmu_volume_stats)
+
+    volume_comparison = compare_rego_and_bmu_volumes(rego_volumes, bmu_volumes)
+    return parse_volume_comparison(volume_comparison)
 
 
 def extract_rego_volume(
@@ -220,24 +237,21 @@ def extract_rego_volume(
     )
 
 
-def extract_bm_vols_by_month(bmus: pd.DataFrame, bmus_total_net_capacity: float) -> Tuple[dict, pd.DataFrame]:
-    try:
-        assert len(bmus["leadPartyId"].unique()) == 1
-    except AssertionError:
-        raise MappingException(f"Expected one leadPartyId but got {list(bmus['leadPartyId'])}")
-
+def extract_bm_vols_by_month(
+    lead_party_id: str, bmu_ids: list, bmus_total_net_capacity: float
+) -> Tuple[dict, pd.DataFrame]:
     try:
         volumes_df = bm_metered_vol_agg.read_and_agg_vols(
             Path("/Users/jjk/data/2024-12-12-CP2023-all-bscs-s0142/"),
-            bmus.iloc[0]["leadPartyId"],
-            list(bmus["elexonBmUnit"]),
+            lead_party_id,
+            bmu_ids,
         )
         total_volume = volumes_df["BM Unit Metered Volume"].sum()
         return (
             dict(
                 bmu_total_volume=total_volume,
                 bmu_capacity_factor=total_volume / (bmus_total_net_capacity * 24 * 365),
-                bmu_sampling_months=12,  # NOTE: presumed!
+                bmu_sampling_months=12,  # NOTE: presumed! TODO: test for this!
             ),
             bm_metered_vol_agg.vols_by_month(volumes_df),
         )
@@ -390,27 +404,19 @@ def map_station(
     generator_profile = {}
     matching_bmus = None
     try:
+        # Get details of a REGO generator
         generator_profile.update(get_generator_profile(rego_station_name, regos, accredited_stations))
 
+        # Add matching BMUs
         matching_bmus = get_matching_bmus(generator_profile, bmus, expected_mapping)
+        generator_profile.update(get_bmu_list_and_aggregate_properties(matching_bmus))
 
-        generator_profile.update(extract_bmu_meta_data(matching_bmus))
-        generator_profile.update(compare_stated_capacities(generator_profile))
+        # Appraise rated power
+        generator_profile.update(appraise_rated_power(generator_profile))
 
-        rego_volume_stats, rego_volumes = extract_rego_volume(
-            regos,
-            generator_profile["rego_station_name"],
-            generator_profile["rego_station_dnc_mw"],
-        )
-        generator_profile.update(rego_volume_stats)
+        # Appraise energy volumes
+        generator_profile.update(appraise_energy_volumes(generator_profile, regos))
 
-        bmu_volume_stats, bmu_volumes = extract_bm_vols_by_month(
-            matching_bmus, generator_profile["bmus_total_net_capacity"]
-        )
-        generator_profile.update(bmu_volume_stats)
-
-        volume_comparison = compare_rego_and_bmu_volumes(rego_volumes, bmu_volumes)
-        generator_profile.update(parse_volume_comparison(volume_comparison))
     except MappingException as e:
         print("\n### EXCEPTION\n" + str(e))
         print("\n### GENERATOR PROFILE\n" + str(generator_profile))
