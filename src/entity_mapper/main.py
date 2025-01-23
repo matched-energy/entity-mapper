@@ -1,6 +1,7 @@
 import copy
+from collections import OrderedDict
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
@@ -316,23 +317,55 @@ def get_matching_bmus(generator_profile: dict, bmus: pd.DataFrame, expected_mapp
     )
 
 
-def get_p_values(
-    score_name: str,
-    generator_profile: dict,
-    column: str,
-    default_column_value: float,
+def get_p_values_for_metric(
+    metric_name: str,
+    value: Any,
     p_value_ranges: List[Dict],
 ) -> dict:
-    score = {score_name: generator_profile.get(column)}
+    p_val_dict = OrderedDict({metric_name: value})
     for s in p_value_ranges:
-        score[f"p({s['lower']}, {s['upper']})"] = (
-            s["p"] if (s["lower"] <= generator_profile.get(column, default_column_value) < s["upper"]) else 1
-        )
-    return score
+        p_val_dict[f"p({s['lower']}, {s['upper']})"] = s["p"] if (s["lower"] <= value < s["upper"]) else 1
+    return p_val_dict
 
 
-def mapping_score(generator_profile: dict) -> pd.DataFrame:
-    summary_dict = {
+def get_p_values_for_all_metrics(generator_profile: dict) -> List:
+    return [
+        get_p_values_for_metric(
+            metric_name="contiguous_words",
+            value=generator_profile.get("lead_party_name_contiguous_words", 0),
+            p_value_ranges=[dict(lower=3, upper=float("inf"), p=0.1)],
+        ),
+        get_p_values_for_metric(
+            metric_name="volume_ratio_p50",
+            value=generator_profile.get("rego_bmu_volume_ratio_median", 0),
+            p_value_ranges=[
+                dict(lower=0.7, upper=1.05, p=0.5),
+                dict(lower=0.9, upper=1.05, p=0.1),
+            ],
+        ),
+        get_p_values_for_metric(
+            metric_name="volume_ratio_min",
+            value=generator_profile.get("rego_bmu_volume_ratio_min", 0),
+            p_value_ranges=[dict(lower=0.1, upper=1.0, p=0.5)],
+        ),
+        get_p_values_for_metric(
+            metric_name="volume_ratio_max",
+            value=generator_profile.get("rego_bmu_volume_ratio_max", 0),
+            p_value_ranges=[dict(lower=0.5, upper=1.1, p=0.5)],
+        ),
+        get_p_values_for_metric(
+            metric_name="power_ratio",
+            value=generator_profile.get("rego_bmu_net_power_ratio", 0),
+            p_value_ranges=[
+                dict(lower=0.5, upper=2, p=0.5),
+                dict(lower=0.95, upper=1.05, p=0.1),
+            ],
+        ),
+    ]
+
+
+def summarise_mapping_and_mapping_strength(generator_profile: dict) -> pd.DataFrame:
+    mapping_summary = {
         "rego_name": generator_profile.get("rego_station_name"),
         "rego_mw": generator_profile.get("rego_station_dnc_mw"),
         "rego_technology": generator_profile.get("rego_station_technology"),
@@ -342,52 +375,14 @@ def mapping_score(generator_profile: dict) -> pd.DataFrame:
         "bmu_fuel_type": generator_profile.get("bmu_fuel_type"),
         "intersection_count": generator_profile.get("lead_party_name_intersection_count"),
     }
-    mapping_scores_list = [
-        get_p_values(
-            score_name="contiguous_words",
-            generator_profile=generator_profile,
-            column="lead_party_name_contiguous_words",
-            default_column_value=0,
-            p_value_ranges=[dict(lower=3, upper=float("inf"), p=0.1)],
-        ),
-        get_p_values(
-            score_name="volume_ratio_p50",
-            generator_profile=generator_profile,
-            column="rego_bmu_volume_ratio_median",
-            default_column_value=0,
-            p_value_ranges=[
-                dict(lower=0.7, upper=1.05, p=0.5),
-                dict(lower=0.9, upper=1.05, p=0.1),
-            ],
-        ),
-        get_p_values(
-            score_name="volume_ratio_min",
-            generator_profile=generator_profile,
-            column="rego_bmu_volume_ratio_min",
-            default_column_value=0,
-            p_value_ranges=[dict(lower=0.1, upper=1.0, p=0.5)],
-        ),
-        get_p_values(
-            score_name="volume_ratio_max",
-            generator_profile=generator_profile,
-            column="rego_bmu_volume_ratio_max",
-            default_column_value=0,
-            p_value_ranges=[dict(lower=0.5, upper=1.1, p=0.5)],
-        ),
-        get_p_values(
-            score_name="power_ratio",
-            generator_profile=generator_profile,
-            column="rego_bmu_net_power_ratio",
-            default_column_value=0,
-            p_value_ranges=[
-                dict(lower=0.5, upper=2, p=0.5),
-                dict(lower=0.95, upper=1.05, p=0.1),
-            ],
-        ),
-    ]
-    row = pd.DataFrame([summary_dict | {k: v for score in mapping_scores_list for k, v in score.items()}])
-    row["p"] = row[[col for col in row.columns if "p(" in col]].prod(axis=1)
-    return row
+    mapping_strength = {
+        k: v for p_val_dict in get_p_values_for_all_metrics(generator_profile) for k, v in p_val_dict.items()
+    }
+    # A single row that summarises the mapping and mapping strength
+    summary_row = pd.DataFrame([mapping_summary | mapping_strength])
+    # An aggregate p-value that is the product of all others
+    summary_row["p"] = summary_row[[col for col in summary_row.columns if "p(" in col]].prod(axis=1)
+    return summary_row
 
 
 def map_station(
@@ -420,7 +415,7 @@ def map_station(
     except MappingException as e:
         LOGGER.warning(str(e) + str(generator_profile))
     LOGGER.debug(scores.common.utils.to_yaml_text(generator_profile))
-    return mapping_score(generator_profile)
+    return summarise_mapping_and_mapping_strength(generator_profile)
 
 
 def map_station_range(
