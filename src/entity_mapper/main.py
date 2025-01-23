@@ -8,79 +8,17 @@ import scores.common.utils
 
 import entity_mapper.utils
 from entity_mapper.common import MappingException
-from entity_mapper.data.accredited_stations import load_accredited_stations
-from entity_mapper.data.bmus import extract_bm_vols_by_month, load_bmus
-from entity_mapper.data.regos import extract_rego_volume, groupby_regos_by_station, load_regos
+from entity_mapper.data.bmus import extract_bm_vols_by_month, get_bmu_list_and_aggregate_properties, load_bmus
+from entity_mapper.data.regos import (
+    extract_rego_volume,
+    get_generator_profile,
+    groupby_regos_by_station,
+    load_accredited_stations,
+    load_regos,
+)
 from entity_mapper.match_meta_data import apply_bmu_match_filters, define_bmu_match_features_and_filters
 
 LOGGER = entity_mapper.utils.get_logger("entity_mapper")
-
-
-def get_generator_profile(rego_station_name: str, regos: pd.DataFrame, accredited_stations: pd.DataFrame) -> dict:
-    rego_accreditation_numbers = regos[regos["Generating Station / Agent Group"] == rego_station_name][
-        "Accreditation No."
-    ].unique()
-    try:
-        assert len(rego_accreditation_numbers) == 1
-    except Exception:
-        raise MappingException(
-            f"Found multiple accreditation numbers for {rego_station_name}: {rego_accreditation_numbers}"
-        )
-
-    rego_accreditation_number = rego_accreditation_numbers[0]
-    accredited_station = accredited_stations[
-        (accredited_stations["AccreditationNumber"] == rego_accreditation_number)
-        & (accredited_stations["Scheme"] == "REGO")
-    ]
-    try:
-        assert len(accredited_station) == 1
-    except Exception:
-        raise MappingException(
-            f"Expected 1 accredited_station for {rego_accreditation_numbers} but found"
-            + f"{list(accredited_station['GeneratingStation'][:5])}"
-        )
-
-    return dict(
-        {
-            "rego_station_name": rego_station_name,
-            "rego_accreditation_number": rego_accreditation_number,
-            "rego_station_dnc_mw": accredited_station.iloc[0]["StationDNC_MW"],
-            "rego_station_technology": accredited_station.iloc[0]["Technology"],
-        }
-    )
-
-
-def get_bmu_list_and_aggregate_properties(bmus: pd.DataFrame) -> dict:
-    try:
-        assert len(bmus["leadPartyName"].unique()) == 1
-        assert len(bmus["leadPartyId"].unique()) == 1
-        assert len(bmus["fuelType"].unique()) == 1
-    except AssertionError:
-        raise MappingException(
-            "Expected one lead party and fuel type but got"
-            + ", ".join(
-                [str(t) for t in bmus[["leadPartyName", "leadPartyId", "fuelType"]].itertuples(index=False, name=None)]
-            )
-        )
-    return dict(
-        bmus=[
-            dict(
-                bmu_unit=bmu["elexonBmUnit"],  # TODO --> bmu_id
-                bmu_demand_capacity=bmu["demandCapacity"],
-                bmu_generation_capacity=bmu["generationCapacity"],
-                bmu_production_or_consumption_flag=bmu["productionOrConsumptionFlag"],
-                bmu_transmission_loss_factor=bmu["transmissionLossFactor"],
-            )
-            for i, bmu in bmus.iterrows()
-        ],
-        bmus_total_demand_capacity=bmus["demandCapacity"].sum(),
-        bmus_total_generation_capacity=bmus["generationCapacity"].sum(),
-        bmu_lead_party_name=bmus.iloc[0]["leadPartyName"],
-        bmu_lead_party_id=bmus.iloc[0]["leadPartyId"],
-        bmu_fuel_type=bmus.iloc[0]["fuelType"],
-        lead_party_name_intersection_count=bmus.iloc[0]["leadPartyName_intersection_count"],
-        lead_party_name_contiguous_words=bmus.iloc[0]["leadPartyName_contiguous_words"],
-    )
 
 
 def appraise_rated_power(generator_profile: dict) -> dict:

@@ -1,10 +1,13 @@
 import copy
+import os
 from pathlib import Path
 from typing import Optional
 
 import numpy as np
 import pandas as pd
 from dateutil.relativedelta import relativedelta
+
+from entity_mapper.common import MappingException
 
 COLUMNS: list[str] = [
     "Accreditation No.",
@@ -120,6 +123,39 @@ def load_regos(regos_path: Path) -> pd.DataFrame:
     return regos
 
 
+def load_accredited_stations(accredited_stations_dir: Path) -> pd.DataFrame:
+    names = [
+        "AccreditationNumber",
+        "Status",
+        "GeneratingStation",
+        "Scheme",
+        "StationDNC",
+        "Country",
+        "Technology",
+        "ContractType",
+        "AccreditationDate",
+        "CommissionDate",
+        "Organisation",
+        "OrganisationContactAddress",
+        "OrganisationContactFax",
+        "GeneratingStationAddress",
+    ]
+    dfs = []
+
+    with os.scandir(accredited_stations_dir) as entries:
+        for entry in entries:
+            if entry.is_file() and entry.name.endswith(".csv"):
+                filepath = Path(entry.path)
+                try:
+                    df = pd.read_csv(filepath, skiprows=1, names=names)
+                    df["StationDNC_MW"] = df["StationDNC"].astype(float) / 1e3
+                    dfs.append(df)
+                except ValueError as e:
+                    print(f"Skipping {entry.name}: {e}")
+
+    return pd.concat(dfs)
+
+
 def groupby_regos_by_station(regos: pd.DataFrame) -> pd.DataFrame:
     regos_by_station = (
         regos.groupby("Generating Station / Agent Group")
@@ -154,4 +190,38 @@ def extract_rego_volume(
             rego_sampling_months=12,  # NOTE: presumed!
         ),
         station_regos_by_period.reset_index().set_index("start").sort_index(),
+    )
+
+
+def get_generator_profile(rego_station_name: str, regos: pd.DataFrame, accredited_stations: pd.DataFrame) -> dict:
+    rego_accreditation_numbers = regos[regos["Generating Station / Agent Group"] == rego_station_name][
+        "Accreditation No."
+    ].unique()
+    try:
+        assert len(rego_accreditation_numbers) == 1
+    except Exception:
+        raise MappingException(
+            f"Found multiple accreditation numbers for {rego_station_name}: {rego_accreditation_numbers}"
+        )
+
+    rego_accreditation_number = rego_accreditation_numbers[0]
+    accredited_station = accredited_stations[
+        (accredited_stations["AccreditationNumber"] == rego_accreditation_number)
+        & (accredited_stations["Scheme"] == "REGO")
+    ]
+    try:
+        assert len(accredited_station) == 1
+    except Exception:
+        raise MappingException(
+            f"Expected 1 accredited_station for {rego_accreditation_numbers} but found"
+            + f"{list(accredited_station['GeneratingStation'][:5])}"
+        )
+
+    return dict(
+        {
+            "rego_station_name": rego_station_name,
+            "rego_accreditation_number": rego_accreditation_number,
+            "rego_station_dnc_mw": accredited_station.iloc[0]["StationDNC_MW"],
+            "rego_station_technology": accredited_station.iloc[0]["Technology"],
+        }
     )
