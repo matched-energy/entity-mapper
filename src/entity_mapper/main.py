@@ -1,6 +1,6 @@
 import copy
 from pathlib import Path
-from typing import Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 
 import numpy as np
 import pandas as pd
@@ -290,21 +290,6 @@ def parse_volume_comparison(volume_comparison: pd.DataFrame) -> dict:
         raise MappingException(e)
 
 
-def add_score(
-    generator_profile: dict,
-    column: str,
-    score_name: str,
-    default: float,
-    stat_range,
-) -> dict:
-    score = {score_name: generator_profile.get(column)}
-    for s in stat_range:
-        score[f"p({s['lower']}, {s['upper']})"] = (
-            s["p"] if (s["lower"] <= generator_profile.get(column, default) < s["upper"]) else 1
-        )
-    return score
-
-
 def get_matching_bmus(generator_profile: dict, bmus: pd.DataFrame, expected_mapping: dict) -> pd.DataFrame:
     # Determine if should rate expected BMUs or search over all BMUs
     expected_overrides = expected_mapping["bmu_ids"] and expected_mapping.get("override")
@@ -331,6 +316,21 @@ def get_matching_bmus(generator_profile: dict, bmus: pd.DataFrame, expected_mapp
     )
 
 
+def get_p_values(
+    score_name: str,
+    generator_profile: dict,
+    column: str,
+    default_column_value: float,
+    p_value_ranges: List[Dict],
+) -> dict:
+    score = {score_name: generator_profile.get(column)}
+    for s in p_value_ranges:
+        score[f"p({s['lower']}, {s['upper']})"] = (
+            s["p"] if (s["lower"] <= generator_profile.get(column, default_column_value) < s["upper"]) else 1
+        )
+    return score
+
+
 def mapping_score(generator_profile: dict) -> pd.DataFrame:
     summary_dict = {
         "rego_name": generator_profile.get("rego_station_name"),
@@ -343,45 +343,47 @@ def mapping_score(generator_profile: dict) -> pd.DataFrame:
         "intersection_count": generator_profile.get("lead_party_name_intersection_count"),
     }
     mapping_scores_list = [
-        add_score(generator_profile, **score_conf)
-        for score_conf in [
-            dict(
-                column="lead_party_name_contiguous_words",
-                score_name="contiguous_words",
-                default=0,
-                stat_range=[dict(lower=3, upper=float("inf"), p=0.1)],
-            ),
-            dict(
-                column="rego_bmu_volume_ratio_median",
-                score_name="volume_ratio_p50",
-                default=0,
-                stat_range=[
-                    dict(lower=0.7, upper=1.05, p=0.5),
-                    dict(lower=0.9, upper=1.05, p=0.1),
-                ],
-            ),
-            dict(
-                column="rego_bmu_volume_ratio_min",
-                score_name="volume_ratio_min",
-                default=0,
-                stat_range=[dict(lower=0.1, upper=1.0, p=0.5)],
-            ),
-            dict(
-                column="rego_bmu_volume_ratio_max",
-                score_name="volume_ratio_max",
-                default=0,
-                stat_range=[dict(lower=0.5, upper=1.1, p=0.5)],
-            ),
-            dict(
-                column="rego_bmu_net_power_ratio",
-                score_name="power_ratio",
-                default=0,
-                stat_range=[
-                    dict(lower=0.5, upper=2, p=0.5),
-                    dict(lower=0.95, upper=1.05, p=0.1),
-                ],
-            ),
-        ]
+        get_p_values(
+            score_name="contiguous_words",
+            generator_profile=generator_profile,
+            column="lead_party_name_contiguous_words",
+            default_column_value=0,
+            p_value_ranges=[dict(lower=3, upper=float("inf"), p=0.1)],
+        ),
+        get_p_values(
+            score_name="volume_ratio_p50",
+            generator_profile=generator_profile,
+            column="rego_bmu_volume_ratio_median",
+            default_column_value=0,
+            p_value_ranges=[
+                dict(lower=0.7, upper=1.05, p=0.5),
+                dict(lower=0.9, upper=1.05, p=0.1),
+            ],
+        ),
+        get_p_values(
+            score_name="volume_ratio_min",
+            generator_profile=generator_profile,
+            column="rego_bmu_volume_ratio_min",
+            default_column_value=0,
+            p_value_ranges=[dict(lower=0.1, upper=1.0, p=0.5)],
+        ),
+        get_p_values(
+            score_name="volume_ratio_max",
+            generator_profile=generator_profile,
+            column="rego_bmu_volume_ratio_max",
+            default_column_value=0,
+            p_value_ranges=[dict(lower=0.5, upper=1.1, p=0.5)],
+        ),
+        get_p_values(
+            score_name="power_ratio",
+            generator_profile=generator_profile,
+            column="rego_bmu_net_power_ratio",
+            default_column_value=0,
+            p_value_ranges=[
+                dict(lower=0.5, upper=2, p=0.5),
+                dict(lower=0.95, upper=1.05, p=0.1),
+            ],
+        ),
     ]
     row = pd.DataFrame([summary_dict | {k: v for score in mapping_scores_list for k, v in score.items()}])
     row["p"] = row[[col for col in row.columns if "p(" in col]].prod(axis=1)
