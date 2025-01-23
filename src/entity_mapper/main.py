@@ -1,4 +1,3 @@
-import copy
 from collections import OrderedDict
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -16,35 +15,9 @@ from entity_mapper.data.regos import (
     load_regos,
 )
 from entity_mapper.filter_on_aggregate_data import appraise_energy_volumes, appraise_rated_power
-from entity_mapper.filter_on_bmu_meta_data import apply_bmu_match_filters, define_bmu_match_features_and_filters
+from entity_mapper.filter_on_bmu_meta_data import get_matching_bmus
 
 LOGGER = entity_mapper.utils.get_logger("entity_mapper")
-
-
-def get_matching_bmus(generator_profile: dict, bmus: pd.DataFrame, expected_mapping: dict) -> pd.DataFrame:
-    # Determine if should rate expected BMUs or search over all BMUs
-    expected_overrides = expected_mapping["bmu_ids"] and expected_mapping.get("override")
-    bmus_to_search = (
-        bmus[bmus["elexonBmUnit"].isin(expected_mapping["bmu_ids"])] if expected_overrides else copy.deepcopy(bmus)
-    )
-
-    # Define matching features and filters
-    bmu_match_features, bmu_match_filters = define_bmu_match_features_and_filters(generator_profile, bmus_to_search)
-    bmus_to_search = bmus_to_search.join(bmu_match_features, how="outer")
-
-    # Return expected / filtered BMUs with matching
-    matching_bmus = bmus_to_search if expected_overrides else apply_bmu_match_filters(bmus_to_search, bmu_match_filters)
-    return entity_mapper.utils.select_columns(
-        matching_bmus,
-        exclude=[
-            "workingDayCreditAssessmentImportCapability",
-            "nonWorkingDayCreditAssessmentImportCapability",
-            "workingDayCreditAssessmentExportCapability",
-            "nonWorkingDayCreditAssessmentExportCapability",
-            "creditQualifyingStatus",
-            "gspGroupId",
-        ],
-    )
 
 
 def get_p_values_for_metric(

@@ -1,5 +1,9 @@
+import copy
+
 import numpy as np
 import pandas as pd
+
+import entity_mapper.utils
 
 
 ################################################################################
@@ -109,3 +113,29 @@ def apply_bmu_match_filters(bmus: pd.DataFrame, filters: list) -> pd.DataFrame:
         raise MappingException(warning)
 
     return filtered_bmus
+
+
+def get_matching_bmus(generator_profile: dict, bmus: pd.DataFrame, expected_mapping: dict) -> pd.DataFrame:
+    # Determine if should rate expected BMUs or search over all BMUs
+    expected_overrides = expected_mapping["bmu_ids"] and expected_mapping.get("override")
+    bmus_to_search = (
+        bmus[bmus["elexonBmUnit"].isin(expected_mapping["bmu_ids"])] if expected_overrides else copy.deepcopy(bmus)
+    )
+
+    # Define matching features and filters
+    bmu_match_features, bmu_match_filters = define_bmu_match_features_and_filters(generator_profile, bmus_to_search)
+    bmus_to_search = bmus_to_search.join(bmu_match_features, how="outer")
+
+    # Return expected / filtered BMUs with matching
+    matching_bmus = bmus_to_search if expected_overrides else apply_bmu_match_filters(bmus_to_search, bmu_match_filters)
+    return entity_mapper.utils.select_columns(
+        matching_bmus,
+        exclude=[
+            "workingDayCreditAssessmentImportCapability",
+            "nonWorkingDayCreditAssessmentImportCapability",
+            "workingDayCreditAssessmentExportCapability",
+            "nonWorkingDayCreditAssessmentExportCapability",
+            "creditQualifyingStatus",
+            "gspGroupId",
+        ],
+    )
