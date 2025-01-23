@@ -1,3 +1,4 @@
+import copy
 from pathlib import Path
 from typing import Optional, Tuple
 
@@ -71,7 +72,7 @@ def contiguous_words(l_name: str, r_name: str) -> int:
     return count
 
 
-def filter_on_meta_data_features(bmus: pd.DataFrame, filters: list) -> pd.DataFrame:
+def apply_bmu_match_filters(bmus: pd.DataFrame, filters: list) -> pd.DataFrame:
     filtered_bmus = bmus.loc[np.logical_and.reduce(filters)]
 
     try:
@@ -135,7 +136,7 @@ def filter_on_name_contiguous(station_profile: dict, bmus: pd.DataFrame) -> (pd.
     return max_count, max_count_filter
 
 
-def get_features_and_filters(station_profile: dict, bmus: pd.DataFrame) -> (pd.DataFrame, list):
+def rate_bmu_match(station_profile: dict, bmus: pd.DataFrame) -> (pd.DataFrame, list):
     features = pd.DataFrame(index=bmus.index)
     filters = []
 
@@ -292,14 +293,19 @@ def add_score(
     return score
 
 
-def get_matching_bmus(bmus: pd.DataFrame, expected_mapping: dict, generator_profile: dict) -> pd.DataFrame:
-    if expected_mapping["bmu_ids"] and expected_mapping.get("override"):
-        matching_bmus = bmus[bmus["elexonBmUnit"].isin(expected_mapping["bmu_ids"])]
-        features, filters = get_features_and_filters(generator_profile, matching_bmus)
-        matching_bmus = pd.concat([matching_bmus, features], axis=1)
-    else:
-        features, filters = get_features_and_filters(generator_profile, bmus)
-        matching_bmus = filter_on_meta_data_features(pd.concat([bmus, features], axis=1), filters)
+def get_matching_bmus(generator_profile: dict, bmus: pd.DataFrame, expected_mapping: dict) -> pd.DataFrame:
+    # Determine if should rate expected BMUs or search over all BMUs
+    expected_overrides = expected_mapping["bmu_ids"] and expected_mapping.get("override")
+    bmus_to_search = (
+        bmus[bmus["elexonBmUnit"].isin(expected_mapping["bmu_ids"])] if expected_overrides else copy.deepcopy(bmus)
+    )
+
+    # Define matching features and filters
+    bmu_match_features, bmu_match_filters = rate_bmu_match(generator_profile, bmus_to_search)
+    bmus_to_search = bmus_to_search.join(bmu_match_features, how="outer")
+
+    # Return expected / filtered BMUs with matching
+    matching_bmus = bmus_to_search if expected_overrides else apply_bmu_match_filters(bmus_to_search, bmu_match_filters)
     return entity_mapper.utils.select_columns(
         matching_bmus,
         exclude=[
@@ -386,7 +392,7 @@ def map_station(
     try:
         generator_profile.update(get_generator_profile(rego_station_name, regos, accredited_stations))
 
-        matching_bmus = get_matching_bmus(bmus, expected_mapping, generator_profile)
+        matching_bmus = get_matching_bmus(generator_profile, bmus, expected_mapping)
 
         generator_profile.update(extract_bmu_meta_data(matching_bmus))
         generator_profile.update(compare_stated_capacities(generator_profile))
