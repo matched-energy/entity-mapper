@@ -53,3 +53,8 @@ distribution = true
 dev = [
     "-e file:///${PROJECT_ROOT}/../elexon-s0142#egg=elexon-s0142",
 ]
+
+[tool.pdm.scripts]
+mypy = "mypy src tests"
+ruff = "ruff format src tests"
+tests = "pytest"
