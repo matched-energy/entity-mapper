@@ -1,11 +1,11 @@
-from collections import OrderedDict
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Tuple
 
 import numpy as np
 import pandas as pd
 import scores.common.utils
 
+import entity_mapper.utils
 from entity_mapper import bm_metered_vol_agg
 from entity_mapper.data.accredited_stations import load_accredited_stations
 from entity_mapper.data.bmus import load_bmus
@@ -69,24 +69,6 @@ def contiguous_words(l_name: str, r_name: str) -> int:
         else:
             break
     return count
-
-
-def select_bmu_columns(bmus: pd.DataFrame) -> pd.DataFrame:
-    return bmus[
-        [
-            col
-            for col in bmus.columns
-            if col
-            not in [
-                "workingDayCreditAssessmentImportCapability",
-                "nonWorkingDayCreditAssessmentImportCapability",
-                "workingDayCreditAssessmentExportCapability",
-                "nonWorkingDayCreditAssessmentExportCapability",
-                "creditQualifyingStatus",
-                "gspGroupId",
-            ]
-        ]
-    ]
 
 
 def filter_on_meta_data_features(bmus: pd.DataFrame, filters: list) -> pd.DataFrame:
@@ -237,7 +219,7 @@ def extract_rego_volume(
     )
 
 
-def extract_bm_vols_by_month(bmus: pd.DataFrame, bmus_total_net_capacity: float) -> pd.DataFrame:
+def extract_bm_vols_by_month(bmus: pd.DataFrame, bmus_total_net_capacity: float) -> Tuple[dict, pd.DataFrame]:
     try:
         assert len(bmus["leadPartyId"].unique()) == 1
     except AssertionError:
@@ -310,7 +292,28 @@ def add_score(
     return score
 
 
-def mapping_score(generator_profile: dict) -> OrderedDict:
+def get_matching_bmus(bmus: pd.DataFrame, expected_mapping: dict, generator_profile: dict) -> pd.DataFrame:
+    if expected_mapping["bmu_ids"] and expected_mapping.get("override"):
+        matching_bmus = bmus[bmus["elexonBmUnit"].isin(expected_mapping["bmu_ids"])]
+        features, filters = get_features_and_filters(generator_profile, matching_bmus)
+        matching_bmus = pd.concat([matching_bmus, features], axis=1)
+    else:
+        features, filters = get_features_and_filters(generator_profile, bmus)
+        matching_bmus = filter_on_meta_data_features(pd.concat([bmus, features], axis=1), filters)
+    return entity_mapper.utils.select_columns(
+        matching_bmus,
+        exclude=[
+            "workingDayCreditAssessmentImportCapability",
+            "nonWorkingDayCreditAssessmentImportCapability",
+            "workingDayCreditAssessmentExportCapability",
+            "nonWorkingDayCreditAssessmentExportCapability",
+            "creditQualifyingStatus",
+            "gspGroupId",
+        ],
+    )
+
+
+def mapping_score(generator_profile: dict) -> pd.DataFrame:
     summary_dict = {
         "rego_name": generator_profile.get("rego_station_name"),
         "rego_mw": generator_profile.get("rego_station_dnc_mw"),
@@ -383,17 +386,9 @@ def map_station(
     try:
         generator_profile.update(get_generator_profile(rego_station_name, regos, accredited_stations))
 
-        if expected_mapping["bmu_ids"] and expected_mapping.get("override"):
-            matching_bmus = bmus[bmus["elexonBmUnit"].isin(expected_mapping["bmu_ids"])]
-            features, filters = get_features_and_filters(generator_profile, matching_bmus)
-            matching_bmus = pd.concat([matching_bmus, features], axis=1)
-        else:
-            features, filters = get_features_and_filters(generator_profile, bmus)
-            matching_bmus = pd.concat([bmus, features], axis=1)
-            matching_bmus = filter_on_meta_data_features(matching_bmus, filters)
-        matching_bmus = select_bmu_columns(matching_bmus)
-        generator_profile.update(extract_bmu_meta_data(matching_bmus))
+        matching_bmus = get_matching_bmus(bmus, expected_mapping, generator_profile)
 
+        generator_profile.update(extract_bmu_meta_data(matching_bmus))
         generator_profile.update(compare_stated_capacities(generator_profile))
 
         rego_volume_stats, rego_volumes = extract_rego_volume(
