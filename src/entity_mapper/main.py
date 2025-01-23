@@ -3,7 +3,6 @@ from collections import OrderedDict
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
-import numpy as np
 import pandas as pd
 import scores.common.utils
 
@@ -12,6 +11,7 @@ from entity_mapper.common import MappingException
 from entity_mapper.data.accredited_stations import load_accredited_stations
 from entity_mapper.data.bmus import extract_bm_vols_by_month, load_bmus
 from entity_mapper.data.regos import extract_rego_volume, groupby_regos_by_station, load_regos
+from entity_mapper.match_meta_data import apply_bmu_match_filters, define_bmu_match_features_and_filters
 
 LOGGER = entity_mapper.utils.get_logger("entity_mapper")
 
@@ -48,105 +48,6 @@ def get_generator_profile(rego_station_name: str, regos: pd.DataFrame, accredite
             "rego_station_technology": accredited_station.iloc[0]["Technology"],
         }
     )
-
-
-def words(name: str) -> list:
-    return [] if name is None else [word.strip("()") for word in name.lower().split()]
-
-
-def contiguous_words(l_name: str, r_name: str) -> int:
-    count = 0
-    for l, r in zip(words(l_name), words(r_name)):
-        if l == r:
-            count += 1
-        else:
-            break
-    return count
-
-
-def apply_bmu_match_filters(bmus: pd.DataFrame, filters: list) -> pd.DataFrame:
-    filtered_bmus = bmus.loc[np.logical_and.reduce(filters)]
-
-    try:
-        assert len(filtered_bmus) > 0
-    except AssertionError:
-        warning = "No matching BMUs found"
-        raise MappingException(warning)
-
-    return filtered_bmus
-
-
-def intersection(series: pd.Series, value: str, ignore: set = None) -> (pd.Series, pd.Series):
-    if ignore is None:
-        ignore = set([])
-    intersection_count = series.apply(
-        lambda x: (
-            0
-            if x is None
-            else len((set([word.strip("()") for word in x.lower().split()]) & set(words(value))) - ignore)
-        )
-    )
-    max_count_filter = (intersection_count > 0) & (intersection_count == max(intersection_count))
-    return intersection_count, max_count_filter
-
-
-def filter_on_generation_capacity(station_profile: dict, bmus: pd.DataFrame) -> pd.Series:
-    return (station_profile["rego_station_dnc_mw"] / 10 < bmus["generationCapacity"]) & (
-        bmus["generationCapacity"] < station_profile["rego_station_dnc_mw"] * 2
-    )
-
-
-def filter_on_fuel_type(station_profile: dict, bmus: pd.DataFrame) -> pd.Series:
-    _, filter = intersection(
-        bmus["fuelType"],
-        station_profile["rego_station_technology"],
-    )
-    return filter
-
-
-def filter_on_name_intersection(station_profile: dict, bmus: pd.DataFrame) -> (pd.Series, pd.Series):
-    lead_party_count, _ = intersection(
-        bmus["leadPartyName"],
-        station_profile["rego_station_name"],
-        ignore=set(["wind", "farm", "windfarm", "limited", "ltd"]),
-    )
-    bmu_intersection_count, _ = intersection(
-        bmus["bmUnitName"],
-        station_profile["rego_station_name"],
-        ignore=set(["wind", "farm", "windfarm", "limited", "ltd"]),
-    )
-    max_count = pd.Series(map(max, lead_party_count, bmu_intersection_count))
-    max_count_filter = (max_count > 0) & (max_count == max(max_count))
-    return max_count, max_count_filter
-
-
-def filter_on_name_contiguous(station_profile: dict, bmus: pd.DataFrame) -> (pd.Series, pd.Series):
-    lead_party_count = bmus["leadPartyName"].apply(lambda x: contiguous_words(station_profile["rego_station_name"], x))
-    bmu_count = bmus["bmUnitName"].apply(lambda x: contiguous_words(station_profile["rego_station_name"], x))
-    max_count = pd.Series(map(max, lead_party_count, bmu_count))
-    max_count_filter = (max_count > 0) & (max_count == max(max_count))
-    return max_count, max_count_filter
-
-
-def rate_bmu_match(station_profile: dict, bmus: pd.DataFrame) -> (pd.DataFrame, list):
-    features = pd.DataFrame(index=bmus.index)
-    filters = []
-
-    filter = filter_on_generation_capacity(station_profile, bmus)
-    filters.append(filter)
-
-    filter = filter_on_fuel_type(station_profile, bmus)
-    filters.append(filter)
-
-    feature, filter = filter_on_name_intersection(station_profile, bmus)
-    features["leadPartyName_intersection_count"] = feature  # TODO
-    filters.append(filter)
-
-    feature, filter = filter_on_name_contiguous(station_profile, bmus)
-    features["leadPartyName_contiguous_words"] = feature  # TODO
-    filters.append(filter)
-
-    return features, filters
 
 
 def get_bmu_list_and_aggregate_properties(bmus: pd.DataFrame) -> dict:
@@ -252,7 +153,7 @@ def get_matching_bmus(generator_profile: dict, bmus: pd.DataFrame, expected_mapp
     )
 
     # Define matching features and filters
-    bmu_match_features, bmu_match_filters = rate_bmu_match(generator_profile, bmus_to_search)
+    bmu_match_features, bmu_match_filters = define_bmu_match_features_and_filters(generator_profile, bmus_to_search)
     bmus_to_search = bmus_to_search.join(bmu_match_features, how="outer")
 
     # Return expected / filtered BMUs with matching
