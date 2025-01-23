@@ -3,12 +3,13 @@ from pathlib import Path
 from typing import Any, Dict, List
 
 import pandas as pd
-import scores.common.utils
+
+import entity_mapper.utils
 
 
 def compare_to_expected(mapping_scores: pd.DataFrame, expected_mappings_file: Path) -> pd.DataFrame:
     """Left join"""
-    expected_mappings = scores.common.utils.from_yaml_file(expected_mappings_file)
+    expected_mappings = entity_mapper.utils.from_yaml_file(expected_mappings_file)
     comparisons = []
     for _, row in mapping_scores.iterrows():
         rego_station_name = row["rego_name"]
@@ -90,4 +91,5 @@ def summarise_mapping_and_mapping_strength(generator_profile: dict) -> pd.DataFr
     summary_row = pd.DataFrame([mapping_summary | mapping_strength])
     # An aggregate p-value that is the product of all others
     summary_row["p"] = summary_row[[col for col in summary_row.columns if "p(" in col]].prod(axis=1)
+    return summary_row
     return summary_row
