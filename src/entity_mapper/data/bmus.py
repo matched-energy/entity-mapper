@@ -3,8 +3,8 @@ import json
 from pathlib import Path
 from typing import Tuple
 
+import elexon_s0142.supplier_load_by_half_hour  # type: ignore # TODO
 import pandas as pd
-import scores.core.supplier_load_by_half_hour
 
 from entity_mapper.common import MappingException
 
@@ -19,7 +19,7 @@ def load_bmus(bmrs_bm_units: Path) -> pd.DataFrame:
 
 
 def read_and_agg_vols(vol_by_bsc: Path, bsc: str, bm_ids: list[str]) -> pd.DataFrame:
-    vols_df = scores.core.supplier_load_by_half_hour.main(
+    vols_df = elexon_s0142.supplier_load_by_half_hour.main(
         vol_by_bsc / Path(bsc),
         Path(f"/tmp/bm_metered_vol_agg_{bsc}.csv"),
         bsc_lead_party_id=bsc,
